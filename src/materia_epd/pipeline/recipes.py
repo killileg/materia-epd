@@ -12,10 +12,10 @@ from materia_epd.pipeline.stages import (
     LoadAssembledComponentsStage,
     ResolveComponentResultsStage,
     AggregateComponentImpactsStage,
-    AggregateComponentPropertiesStage,
     SetAverageC1ToZeroStage,
     DeriveTransportA4C2ImpactsStage,
     ValidateAveragedImpactsStage,
+    AssembledPropertiesStage,
     BuildReportStage,
 )
 from materia_epd.pipeline.context import EpdPipelineContext
@@ -53,8 +53,9 @@ class RecipeFactory:
             return [
                 LoadAssembledComponentsStage(),
                 ResolveComponentResultsStage(),
+                AssembledPropertiesStage(),
+                ValidateMassConversionStage(),
                 AggregateComponentImpactsStage(),
-                AggregateComponentPropertiesStage(),
                 SetAverageC1ToZeroStage(),
                 DeriveTransportA4C2ImpactsStage(),
                 ValidateAveragedImpactsStage(),

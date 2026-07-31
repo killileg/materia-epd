@@ -32,7 +32,6 @@ dependencies = [
     "structlog>=25.5.0",
     "matplotlib",
     "reportlab",
-    "pyarrow",
 ]
 license = "MIT"
 license-files = ["LICENSE.txt"]

@@ -301,7 +301,7 @@ class LoadAssembledComponentsStage:
 
         normalized_components: list[dict[str, float | str]] = []
         for idx, component in enumerate(components):
-            process_uuid = component.get("process_uuid")
+            process_uuid = component.get("uuid")
             quantity = component.get("quantity")
             unit = component.get("unit")
 
@@ -343,9 +343,9 @@ class LoadAssembledComponentsStage:
 
             normalized_components.append(
                 {
-                    "process_uuid": process_uuid,
+                    "uuid": process_uuid,
                     "quantity": float(quantity),
-                    "unit": unit or "mass",
+                    "unit": unit,
                 }
             )
 
@@ -368,7 +368,7 @@ class ResolveComponentResultsStage:
         reports: dict[str, dict] = {}
 
         for component in ctx.assembled_components:
-            component_uuid = component["process_uuid"]
+            component_uuid = component["uuid"]
             result = ctx.results_registry.get(component_uuid, {})
             impacts = result.get("avg_gwps")
             if not isinstance(impacts, dict):
@@ -408,7 +408,7 @@ class AggregateComponentImpactsStage:
         aggregated: dict[str, dict[str, float]] = defaultdict(dict)
 
         for component in ctx.assembled_components:
-            component_uuid = component["process_uuid"]
+            component_uuid = component["uuid"]
             quantity = component["quantity"]
             impacts = ctx.component_impacts.get(component_uuid, {})
 
@@ -435,54 +435,14 @@ class AggregateComponentImpactsStage:
         )
 
 
-class AggregateComponentPropertiesStage:
-    name = "aggregate-component-properties"
-
-    _ADDITIVE_FIELDS = {"mass", "volume", "surface", "length", "unit_count"}
-    _NON_ADDITIVE_FIELDS = {
-        "gross_density",
-        "grammage",
-        "linear_density",
-        "layer_thickness",
-        "cross_sectional_area",
-        "weight_per_piece",
-    }
+class AssembledPropertiesStage:
+    name = "assembled-properties"
 
     def run(self, ctx: EpdPipelineContext) -> None:
-        totals: dict[str, float] = {key: 0.0 for key in self._ADDITIVE_FIELDS}
-        missing_properties: list[str] = []
-
-        for component in ctx.assembled_components:
-            component_uuid = component["process_uuid"]
-            quantity = component["quantity"]
-            result = ctx.results_registry.get(component_uuid, {})
-            props = result.get("avg_properties")
-            if not isinstance(props, dict):
-                missing_properties.append(component_uuid)
-                continue
-
-            for field in self._ADDITIVE_FIELDS:
-                value = props.get(field)
-                if isinstance(value, (int, float)):
-                    totals[field] += quantity * float(value)
-
-        if missing_properties:
-            ctx.add_diagnostic(
-                kind="warning",
-                message="Some assembled components had no properties.",
-                stage=self.name,
-                process_uuid=ctx.process.uuid,
-                missing_components=missing_properties,
-            )
-
-        ctx.avg_properties = {**totals, **{k: None for k in self._NON_ADDITIVE_FIELDS}}
-        ctx.add_diagnostic(
-            kind="info",
-            message="Aggregated additive physical properties for assembled product.",
-            stage=self.name,
-            process_uuid=ctx.process.uuid,
-            properties=sorted(self._ADDITIVE_FIELDS),
-        )
+        if ctx.process and hasattr(ctx.process, "material") and ctx.process.material:
+            mat = Material(**ctx.process.material.to_dict())
+            mat._compute()
+            ctx.avg_properties = mat.to_dict()
 
 
 class DeriveTransportA4C2ImpactsStage:
