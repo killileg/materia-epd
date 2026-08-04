@@ -10,7 +10,6 @@ from materia_epd.epd.filters import (
     get_filtered_epds,
     get_locfiltered_epds,
 )
-from materia_epd.core.constants import MASS_KWARGS
 from materia_epd.core.physics import Material
 from materia_epd.metrics.averaging import (
     average_impacts,
@@ -87,60 +86,12 @@ class FilterByUnitStage:
 
         if not ctx.filtered_epds:
             ctx.add_diagnostic(
-                kind="warning",
+                kind="error",
                 message="No EPDs passed unit conformity filtering.",
                 stage=self.name,
                 process_uuid=ctx.process.uuid,
                 dec_unit=ctx.active_dec_unit,
             )
-
-
-class FallbackToMassStage:
-    name = "fallback-to-mass"
-
-    def run(self, ctx: EpdPipelineContext) -> None:
-        if ctx.filtered_epds:
-            return
-
-        ctx.used_mass_fallback = True
-
-        ctx.add_diagnostic(
-            kind="warning",
-            message="Switched to mass-based functional unit.",
-            stage=self.name,
-            process_uuid=ctx.process.uuid,
-            previous_dec_unit=ctx.active_dec_unit,
-            new_dec_unit="mass",
-        )
-
-        ctx.active_material_kwargs = MASS_KWARGS
-        ctx.active_dec_unit = "mass"
-
-        filtered_epds, rejected_epds = get_filtered_epds(
-            ctx.matched_epds, UnitConformityFilter(ctx.active_material_kwargs)
-        )
-
-        ctx.filtered_epds = filtered_epds
-        ctx.rejected_epds = rejected_epds
-
-        ctx.add_diagnostic(
-            kind="info",
-            message="Mass fallback filtering completed.",
-            stage=self.name,
-            process_uuid=ctx.process.uuid,
-            dec_unit=ctx.active_dec_unit,
-            filtered=len(ctx.filtered_epds),
-            rejected=len(ctx.rejected_epds),
-        )
-
-        if not ctx.filtered_epds:
-            ctx.add_diagnostic(
-                kind="error",
-                message="No EPDs passed filtering even after mass fallback.",
-                stage=self.name,
-                process_uuid=ctx.process.uuid,
-            )
-            ctx.stop(success=False)
 
 
 class ComputeAveragePropertiesStage:
@@ -176,16 +127,6 @@ class ValidateMassConversionStage:
     }
 
     def run(self, ctx: EpdPipelineContext) -> None:
-        if ctx.avg_properties is None:
-            ctx.add_diagnostic(
-                kind="error",
-                message="Mass conversion validation failed.",
-                stage=self.name,
-                process_uuid=ctx.process.uuid,
-            )
-            ctx.stop(success=False)
-            return
-
         dec_unit = ctx.active_dec_unit
         if dec_unit == "mass":
             return
@@ -289,57 +230,11 @@ class LoadAssembledComponentsStage:
 
     def run(self, ctx: EpdPipelineContext) -> None:
         components = (ctx.matches or {}).get("components")
-        if not isinstance(components, list) or not components:
-            ctx.add_diagnostic(
-                kind="error",
-                message="Assembled pipeline requires a non-empty components list.",
-                stage=self.name,
-                process_uuid=ctx.process.uuid,
-            )
-            ctx.stop(success=False)
-            return
-
         normalized_components: list[dict[str, float | str]] = []
-        for idx, component in enumerate(components):
+        for component in components:
             process_uuid = component.get("uuid")
             quantity = component.get("quantity")
             unit = component.get("unit")
-
-            if not process_uuid or not isinstance(process_uuid, str):
-                ctx.add_diagnostic(
-                    kind="error",
-                    message="Assembled component is missing a valid process_uuid.",
-                    stage=self.name,
-                    process_uuid=ctx.process.uuid,
-                    component_index=idx,
-                )
-                ctx.stop(success=False)
-                return
-
-            if not isinstance(quantity, (int, float)) or quantity <= 0:
-                ctx.add_diagnostic(
-                    kind="error",
-                    message="Assembled component quantity must be a positive number.",
-                    stage=self.name,
-                    process_uuid=ctx.process.uuid,
-                    component_index=idx,
-                    component_process_uuid=process_uuid,
-                    quantity=quantity,
-                )
-                ctx.stop(success=False)
-                return
-
-            if unit is not None and not isinstance(unit, str):
-                ctx.add_diagnostic(
-                    kind="error",
-                    message="Assembled component unit must be a string when provided.",
-                    stage=self.name,
-                    process_uuid=ctx.process.uuid,
-                    component_index=idx,
-                    component_process_uuid=process_uuid,
-                )
-                ctx.stop(success=False)
-                return
 
             normalized_components.append(
                 {
@@ -415,9 +310,14 @@ class AggregateComponentImpactsStage:
             for indicator, modules in impacts.items():
                 indicator_modules = aggregated.setdefault(indicator, {})
                 for module, value in modules.items():
-                    indicator_modules[module] = indicator_modules.get(module, 0.0) + (
-                        quantity * float(value)
-                    )
+                    if module == "A4":
+                        indicator_modules["A1-A3"] = indicator_modules.get(
+                            "A1-A3", 0.0
+                        ) + (quantity * float(value))
+                    else:
+                        indicator_modules[module] = indicator_modules.get(
+                            module, 0.0
+                        ) + (quantity * float(value))
 
         ctx.avg_gwps = {
             indicator: {module: round(value, 6) for module, value in modules.items()}
@@ -427,7 +327,7 @@ class AggregateComponentImpactsStage:
         ctx.unmatched_epds = []
         ctx.add_diagnostic(
             kind="info",
-            message="Aggregated assembled impacts using quantity-weighted sum-product.",
+            message="Aggregated assembled impacts.",
             stage=self.name,
             process_uuid=ctx.process.uuid,
             indicators=len(ctx.avg_gwps),
@@ -452,6 +352,10 @@ class DeriveTransportA4C2ImpactsStage:
         if ctx.avg_gwps is None:
             return
 
+        # Check if A4/C2 calculation should be skipped
+        if ctx.matches.get("skip_a4_c2"):
+            return
+
         mass = (ctx.avg_properties or {}).get("mass")
         if not isinstance(mass, (int, float)):
             ctx.add_diagnostic(
@@ -463,35 +367,27 @@ class DeriveTransportA4C2ImpactsStage:
             return
 
         target_location = ctx.process.loc
-        grouped_market = self._aggregate_market_by_transport_location(
-            ctx.process.market or {}, target_location
-        )
+
+        # Check if Greater Region should be used instead of market shares
+        if ctx.matches.get("use_greater_region"):
+            grouped_market = {"Greater Region": 1.0}
+
+        else:
+            grouped_market = self._aggregate_market_by_transport_location(
+                ctx.process.market or {}, target_location
+            )
+
         weighted_impacts_per_kg: dict[str, float] = {}
         total_share = 0.0
-        missing_locations: list[str] = []
         for source_location, share in grouped_market.items():
             impacts_per_kg = get_transport_impact_per_kg(
                 source_location, target_location
             )
-            if not impacts_per_kg:
-                missing_locations.append(source_location)
-                continue
-
             total_share += share
             for indicator, value in impacts_per_kg.items():
                 weighted_impacts_per_kg[indicator] = (
                     weighted_impacts_per_kg.get(indicator, 0.0) + share * value
                 )
-
-        if total_share <= 0:
-            ctx.add_diagnostic(
-                kind="warning",
-                message="Skipped A4 transport derivation because no transport factors were available for market entries.",  # noqa: E501
-                stage=self.name,
-                process_uuid=ctx.process.uuid,
-                missing_locations=missing_locations,
-            )
-            return
 
         for indicator, weighted_value in weighted_impacts_per_kg.items():
             per_kg = weighted_value / total_share
@@ -517,8 +413,6 @@ class DeriveTransportA4C2ImpactsStage:
             mass=mass,
             target_location=target_location,
             grouped_market=grouped_market,
-            missing_locations=missing_locations,
-            local_c2_available=bool(local_c2_impacts),
         )
 
     @staticmethod

@@ -4,7 +4,6 @@ from materia_epd.pipeline.stages import (
     PipelineStage,
     PrefilterByUuidStage,
     FilterByUnitStage,
-    FallbackToMassStage,
     ComputeAveragePropertiesStage,
     ValidateMassConversionStage,
     ComputeAverageImpactsStage,
@@ -27,7 +26,6 @@ class RecipeFactory:
             return [
                 PrefilterByUuidStage(),
                 FilterByUnitStage(),
-                FallbackToMassStage(),
                 ComputeAveragePropertiesStage(),
                 ValidateMassConversionStage(),
                 ComputeAverageImpactsStage(),
@@ -40,7 +38,6 @@ class RecipeFactory:
             return [
                 PrefilterByUuidStage(),
                 FilterByUnitStage(),
-                FallbackToMassStage(),
                 ComputeAveragePropertiesStage(),
                 ValidateMassConversionStage(),
                 ComputeMarketAverageImpactsStage(),
