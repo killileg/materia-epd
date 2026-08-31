@@ -1,5 +1,6 @@
 from typing import Protocol
 from collections import defaultdict
+import numpy as np
 
 from materia_epd.pipeline.context import EpdPipelineContext
 from materia_epd.core.constants import _TOL_ABS
@@ -18,6 +19,7 @@ from materia_epd.metrics.averaging import (
 )
 from materia_epd.geo.locations import get_transport_impact_per_kg
 from materia_epd.geo.locations import get_location_attribute
+from materia_epd.resources import get_tech_shares
 
 
 class PipelineStage(Protocol):
@@ -98,9 +100,6 @@ class ComputeAveragePropertiesStage:
     name = "compute-average-properties"
 
     def run(self, ctx: EpdPipelineContext) -> None:
-        for epd in ctx.filtered_epds:
-            epd.get_lcia_results()
-
         avg_properties = average_material_properties(ctx.filtered_epds)
         mat = Material(**avg_properties)
         mat.rescale(ctx.active_material_kwargs)
@@ -152,6 +151,8 @@ class ComputeAverageImpactsStage:
     name = "compute-average-impacts"
 
     def run(self, ctx: EpdPipelineContext) -> None:
+        for epd in ctx.filtered_epds:
+            epd.get_lcia_results()
         ctx.avg_gwps = average_impacts([epd.lcia_results for epd in ctx.filtered_epds])
         ctx.unmatched_epds = []
 
@@ -183,6 +184,7 @@ class ComputeMarketAverageImpactsStage:
 
         ctx.unmatched_epds = []
         for epd in ctx.filtered_epds:
+            epd.get_lcia_results()
             if epd.uuid not in matched_market_uuids:
                 ctx.unmatched_epds.append(
                     (epd.uuid, "EPD has no appropriate location in market.")
@@ -436,6 +438,109 @@ class DeriveTransportA4C2ImpactsStage:
             grouped_market[grouped_key] = grouped_market.get(grouped_key, 0.0) + share
 
         return grouped_market
+
+
+class LoadRegressionDataStage:
+    name = "load-regression-data"
+
+    def run(self, ctx: EpdPipelineContext) -> None:
+        regression_data = ctx.matches.get("data", [])
+        uuids = [entry["uuid"] for entry in regression_data]
+        ctx.process.matches["uuids"] = uuids
+
+        ctx.regression_data = {
+            entry["uuid"]: {
+                "technology": entry.get("technology"),
+                "secondary material": entry.get("secondary material"),
+            }
+            for entry in regression_data
+        }
+
+
+class RegressionImpactsStage:
+    name = "compute-regression-impacts"
+
+    def run(self, ctx: EpdPipelineContext) -> None:
+        techs = ctx.matches["metadata"]["technology"]
+
+        # Collect all indicators with A1-A3
+        all_indicators = set()
+        for epd in ctx.filtered_epds:
+            epd.get_lcia_results()
+            for r in epd.lcia_results:
+                if "A1-A3" in r["values"]:
+                    all_indicators.add(r["name"])
+
+        # Fit regression per indicator
+        beta = {}
+        avg_sec = defaultdict(list)
+
+        for ind in all_indicators:
+            X, y = [], []
+            tech_sec = defaultdict(list)
+
+            for epd in ctx.filtered_epds:
+                entry = ctx.regression_data.get(epd.uuid)
+                a1a3_val = next(
+                    (
+                        float(r["values"]["A1-A3"])
+                        for r in epd.lcia_results
+                        if r["name"] == ind and "A1-A3" in r["values"]
+                    ),
+                    None,
+                )
+
+                X.append(
+                    [1.0]
+                    + [1 if entry["technology"] == t else 0 for t in techs]
+                    + [float(entry["secondary material"])]
+                )
+                y.append(a1a3_val)
+                tech_sec[entry["technology"]].append(float(entry["secondary material"]))
+
+            beta[ind] = np.linalg.lstsq(np.array(X), np.array(y), rcond=None)[0]
+            for tech, secs in tech_sec.items():
+                avg_sec[tech].extend(secs)
+
+        avg_sec_final = {t: np.mean(s) if s else 0 for t, s in avg_sec.items()}
+
+        # Compute country impacts
+        market_impacts = {}
+        for country in ctx.process.market:
+            tech_mix = get_tech_shares(country, ctx.process.hs_class)
+            country_imp = defaultdict(dict)
+
+            for ind, b in beta.items():
+                a1a3 = sum(
+                    share
+                    * float(
+                        np.array(
+                            [1.0]
+                            + [1 if tech == t else 0 for t in techs]
+                            + [avg_sec_final.get(tech, 0)]
+                        )
+                        @ b
+                    )
+                    for tech, share in tech_mix.items()
+                    if share > 0
+                )
+                country_imp[ind]["A1-A3"] = a1a3
+
+            country_epds = get_locfiltered_epds(
+                ctx.filtered_epds, LocationFilter({country})
+            )
+            if country_epds:
+                other_imp = average_impacts([e.lcia_results for e in country_epds])
+                for ind, mods in other_imp.items():
+                    for mod, val in mods.items():
+                        if mod != "A1-A3":
+                            country_imp[ind][mod] = val
+
+            market_impacts[country] = dict(country_imp)
+
+        ctx.market_impacts = market_impacts
+        ctx.avg_gwps = market_weighted_impacts(ctx.process.market, market_impacts)
+        ctx.unmatched_epds = []
 
 
 class BuildReportStage:

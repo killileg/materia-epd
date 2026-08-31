@@ -2,17 +2,7 @@ from materia_epd.core.utils import to_float
 
 
 def average_impacts(impacts_list, decimals=6) -> dict[str, dict[str, float | None]]:
-    """Calculate average impacts from a list of impact dictionaries.
-
-    Returns a dict of the form:
-    {
-        "indicator_name": {
-            "module_name": value,
-            ...
-        },
-        ...
-    }
-    """
+    """Calculate average impacts from a list of impact dictionaries."""
     sums: dict[str, dict[str, float]] = {}
     counts: dict[str, dict[str, int]] = {}
 

@@ -686,6 +686,8 @@ def draw_report(report: Dict[str, Any], out_path: Path, report_uuid: str):
         method = "Method: market-weighted averaging. Country-level averages are combined using market share weights for the product HS code."  # noqa: E501
     elif recipe_type == "assembled":
         method = "Method: quantity-weighted aggregation. Component impacts and properties are aggregated using component quantities."  # noqa: E501
+    elif recipe_type == "regression":
+        method = "Method: regression based analysis acounting for production technology and average secondary material content."  # noqa: E501
     else:
         method = "Method: arithmetic averaging. Matching EPDs are averaged with equal weight for each indicator and module."  # noqa: E501
     c.setFont("Helvetica", 10)

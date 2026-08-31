@@ -170,3 +170,14 @@ def generate_market(loc_code, hs_code) -> None:
     else:
         print(f"No market shares can be generated for {hs_code} imports to {loc_code}.")
         return None
+
+
+def estimate_national_consumption(loc_code: str, hs_code: str) -> float:
+    """Estimate national consumption in kg."""
+
+    def sum_flow(flow_code):
+        df = fetch_trade_data(loc_code, hs_code, flow_code, aggregate=True)
+        return df[QUANTITY_COL].sum() if df is not None and not df.empty else 0
+
+    prod = get_national_production(loc_code, hs_code)["production"] * len(C.TRADE_YEARS)
+    return sum_flow("M") + prod - sum_flow("X") + sum_flow("RM")

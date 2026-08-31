@@ -16,6 +16,8 @@ from materia_epd.pipeline.stages import (
     ValidateAveragedImpactsStage,
     AssembledPropertiesStage,
     BuildReportStage,
+    LoadRegressionDataStage,
+    RegressionImpactsStage,
 )
 from materia_epd.pipeline.context import EpdPipelineContext
 
@@ -53,6 +55,19 @@ class RecipeFactory:
                 AssembledPropertiesStage(),
                 ValidateMassConversionStage(),
                 AggregateComponentImpactsStage(),
+                SetAverageC1ToZeroStage(),
+                DeriveTransportA4C2ImpactsStage(),
+                ValidateAveragedImpactsStage(),
+                BuildReportStage(),
+            ]
+        if ctx.matches.get("type") == "regression":
+            return [
+                LoadRegressionDataStage(),
+                PrefilterByUuidStage(),
+                FilterByUnitStage(),
+                ComputeAveragePropertiesStage(),
+                ValidateMassConversionStage(),
+                RegressionImpactsStage(),
                 SetAverageC1ToZeroStage(),
                 DeriveTransportA4C2ImpactsStage(),
                 ValidateAveragedImpactsStage(),
