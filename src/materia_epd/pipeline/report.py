@@ -137,9 +137,7 @@ def build_impact_comparison_table(report: Dict[str, Any]) -> pd.DataFrame:
                     "Module": mod,
                     "Previous": p,
                     "Current": c,
-                    "RelativeChange": 0.0
-                    if abs(p) <= 1e-12
-                    else ((c - p) / abs(p)),
+                    "RelativeChange": 0.0 if abs(p) <= 1e-12 else ((c - p) / abs(p)),
                     "Direction": "no-change"
                     if abs(c - p) <= 1e-12
                     else ("increase" if c > p else "decrease"),
@@ -579,7 +577,8 @@ def draw_report(report: Dict[str, Any], out_path: Path, report_uuid: str):
     fig, axes = plt.subplots(3, 4, figsize=(10, 8))
     axes = axes.flatten()
     for ax, f in zip(axes[:11], fields):
-        vals, avg = df_phys[f].dropna(), df_phys_avg[f].iloc[0]
+        vals = df_phys[f].dropna() if f in df_phys.columns else pd.Series(dtype=float)
+        avg = df_phys_avg[f].iloc[0] if f in df_phys_avg.columns else None
         if len(vals) > 0:
             if vals.nunique() > 1:
                 ax.boxplot([vals], positions=[1], widths=0.5)
@@ -637,10 +636,12 @@ def draw_report(report: Dict[str, Any], out_path: Path, report_uuid: str):
             series = impact_series(df, col)
             avg_value = df_avg[col].iloc[0] if col in df_avg else 0.0
             # A4 can be derived at aggregate level and may not exist in source EPD rows.
-            # In that case, show the derived aggregate value in the plot instead of a zero-only box.
-            if col.endswith("_A4") and (
-                len(series) == 0 or (series.abs() <= 1e-12).all()
-            ) and abs(avg_value) > 1e-12:
+            # In that case, show the derived aggregate value in the plot instead of a zero-only box.  # noqa: E501
+            if (
+                col.endswith("_A4")
+                and (len(series) == 0 or (series.abs() <= 1e-12).all())
+                and abs(avg_value) > 1e-12
+            ):
                 series = pd.Series([avg_value])
             vals.append(series)
         box_vals = [v for v in vals if len(v) > 0]
@@ -680,12 +681,15 @@ def draw_report(report: Dict[str, Any], out_path: Path, report_uuid: str):
 
     c.setFont("Helvetica-Bold", 16)
     c.drawString(40, page_h - 40, "Averaging Method and Results Table")
-    method = (
-        "Method: market-weighted averaging. Country-level averages are combined using market share weights for the product HS code."  # noqa: E501
-        if report.get("meta", {}).get("pipeline", {}).get("recipe_type")
-        == "market-average"
-        else "Method: arithmetic averaging. Matching EPDs are averaged with equal weight for each indicator and module."  # noqa: E501
-    )
+    recipe_type = report.get("meta", {}).get("pipeline", {}).get("recipe_type")
+    if recipe_type == "market-average":
+        method = "Method: market-weighted averaging. Country-level averages are combined using market share weights for the product HS code."  # noqa: E501
+    elif recipe_type == "assembled":
+        method = "Method: quantity-weighted aggregation. Component impacts and properties are aggregated using component quantities."  # noqa: E501
+    elif recipe_type == "regression":
+        method = "Method: regression based analysis acounting for production technology and average secondary material content."  # noqa: E501
+    else:
+        method = "Method: arithmetic averaging. Matching EPDs are averaged with equal weight for each indicator and module."  # noqa: E501
     c.setFont("Helvetica", 10)
     t = c.beginText(40, page_h - 62)
     for line in method.split(". "):

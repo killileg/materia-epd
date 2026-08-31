@@ -6,7 +6,7 @@ from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
 
-from materia_epd.epd.generators import gen_xml_objects, load_epd_corpus
+from materia_epd.epd.generators import gen_epds, gen_xml_objects
 from materia_epd.epd.models import IlcdProcess
 from materia_epd.core.physics import Material
 from materia_epd.pipeline.report import write_report, draw_report
@@ -77,23 +77,11 @@ def print_pipeline_summary(ctx: EpdPipelineContext) -> None:
 
 
 def run_materia(
-    path_to_gen_folder: Path,
-    path_to_epd_folder: Path,
-    output_path: Path,
-    *,
-    epd_cache_dir: Path | None = None,
-    use_epd_cache: bool = True,
-    verbose: bool = False,
+    path_to_gen_folder: Path, path_to_epd_folder: Path, output_path: Path
 ) -> None:
-    epds = load_epd_corpus(
-        path_to_epd_folder,
-        epd_cache_dir,
-        logger,
-        use_cache=use_epd_cache,
-        console=console,
-        verbose=verbose,
-    )
-    logger.info("Loaded EPD corpus", count=len(epds))
+    epds = list(gen_epds(path_to_epd_folder / "processes", logger))
+    logger.info("Parsed XML EPDs", count=len(epds))
+
     results_registry: dict[str, dict] = {}
     processes = []
     for path, root in gen_xml_objects(path_to_gen_folder / "processes", logger):
@@ -135,12 +123,8 @@ def run_materia(
             draw_report(ctx.report, output_path, process.uuid)
         return ctx
 
-    base_processes = [
-        p for p in processes if p.matches.get("type") != "assembled"
-    ]
-    assembled_queue = [
-        p for p in processes if p.matches.get("type") == "assembled"
-    ]
+    base_processes = [p for p in processes if p.matches.get("type") != "assembled"]
+    assembled_queue = [p for p in processes if p.matches.get("type") == "assembled"]
 
     for process in base_processes:
         _run_process(process)
@@ -155,7 +139,8 @@ def run_materia(
                 continue
 
             missing_dependency_error = any(
-                d.get("stage") == "resolve-component-results" and d.get("kind") == "error"
+                d.get("stage") == "resolve-component-results"
+                and d.get("kind") == "error"
                 for d in ctx.diagnostics
             )
             if missing_dependency_error:

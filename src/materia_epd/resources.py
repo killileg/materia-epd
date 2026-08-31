@@ -63,6 +63,21 @@ def get_market_shares(loc_code: str, hs_code: str):
     return data
 
 
+@lru_cache(maxsize=1)
+def get_tech_shares(loc_code: str, hs_code: str):
+    filename = f"{hs_code}.json"
+    subfolder = f"national_production/{loc_code}"
+
+    resource = files(__package__).joinpath("data", subfolder, filename)
+    if resource.is_file():
+        with as_file(resource) as path:
+            data = io_files.read_json_file(path)
+            data = data.get("technology")
+            if data is None:
+                raise ValueError(f"Missing techshares for: {loc_code}/{hs_code}")
+            return data
+
+
 def get_comtrade_api_key():
     api_file = USER_DATA_DIR / "comtrade_api_key.json"
     if api_file.exists():

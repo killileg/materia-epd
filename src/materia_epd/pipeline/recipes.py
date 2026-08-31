@@ -4,7 +4,6 @@ from materia_epd.pipeline.stages import (
     PipelineStage,
     PrefilterByUuidStage,
     FilterByUnitStage,
-    FallbackToMassStage,
     ComputeAveragePropertiesStage,
     ValidateMassConversionStage,
     ComputeAverageImpactsStage,
@@ -12,11 +11,13 @@ from materia_epd.pipeline.stages import (
     LoadAssembledComponentsStage,
     ResolveComponentResultsStage,
     AggregateComponentImpactsStage,
-    AggregateComponentPropertiesStage,
     SetAverageC1ToZeroStage,
     DeriveTransportA4C2ImpactsStage,
     ValidateAveragedImpactsStage,
+    AssembledPropertiesStage,
     BuildReportStage,
+    LoadRegressionDataStage,
+    RegressionImpactsStage,
 )
 from materia_epd.pipeline.context import EpdPipelineContext
 
@@ -27,7 +28,6 @@ class RecipeFactory:
             return [
                 PrefilterByUuidStage(),
                 FilterByUnitStage(),
-                FallbackToMassStage(),
                 ComputeAveragePropertiesStage(),
                 ValidateMassConversionStage(),
                 ComputeAverageImpactsStage(),
@@ -40,7 +40,6 @@ class RecipeFactory:
             return [
                 PrefilterByUuidStage(),
                 FilterByUnitStage(),
-                FallbackToMassStage(),
                 ComputeAveragePropertiesStage(),
                 ValidateMassConversionStage(),
                 ComputeMarketAverageImpactsStage(),
@@ -53,8 +52,22 @@ class RecipeFactory:
             return [
                 LoadAssembledComponentsStage(),
                 ResolveComponentResultsStage(),
+                AssembledPropertiesStage(),
+                ValidateMassConversionStage(),
                 AggregateComponentImpactsStage(),
-                AggregateComponentPropertiesStage(),
+                SetAverageC1ToZeroStage(),
+                DeriveTransportA4C2ImpactsStage(),
+                ValidateAveragedImpactsStage(),
+                BuildReportStage(),
+            ]
+        if ctx.matches.get("type") == "regression":
+            return [
+                LoadRegressionDataStage(),
+                PrefilterByUuidStage(),
+                FilterByUnitStage(),
+                ComputeAveragePropertiesStage(),
+                ValidateMassConversionStage(),
+                RegressionImpactsStage(),
                 SetAverageC1ToZeroStage(),
                 DeriveTransportA4C2ImpactsStage(),
                 ValidateAveragedImpactsStage(),

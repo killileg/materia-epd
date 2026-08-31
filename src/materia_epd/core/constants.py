@@ -128,8 +128,8 @@ LCIA_AGGREGATE_MAP = {"A1-A3": ["A1", "A2", "A3"]}
 
 # ----------------------------- Physics --------------------------------------
 
-_TOL_ABS = 1e-7
-_TOL_REL = 1e-5
+_TOL_ABS = 1e-4
+_TOL_REL = 1e-4
 _REL_DEC = 8
 
 QUANTITIES = ("mass", "volume", "surface", "length", "unit_count")

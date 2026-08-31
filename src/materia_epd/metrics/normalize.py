@@ -22,7 +22,7 @@ def normalize_module_values(
     return {
         mod: (
             raw_values.get(mod)
-            if mod in raw_values
+            if mod in raw_values and raw_values.get(mod) is not None
             else (
                 sum(
                     (raw_values.get(part) if raw_values.get(part) is not None else 0.0)

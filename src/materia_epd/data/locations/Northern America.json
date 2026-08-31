@@ -19,10 +19,10 @@
   ],
   "TransportImpactPerKgByTarget": {
     "LUX": {
-      "Climate change-Total": 0.2003,
-      "Climate change-Fossil": 0.2003,
-      "Climate change-Biogenic": 0.0,
-      "Climate change-Land use and land use change": 0.0
+      "Climate change-Total": 0.1425327,
+      "Climate change-Fossil": 0.1413564,
+      "Climate change-Biogenic": 0.0003517,
+      "Climate change-Land use and land use change": 0.0007641
     }
   }
 }
