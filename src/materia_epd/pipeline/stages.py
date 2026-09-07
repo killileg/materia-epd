@@ -490,6 +490,17 @@ class RegressionImpactsStage:
                     None,
                 )
 
+                if a1a3_val is None:
+                    ctx.add_diagnostic(
+                        kind="warning",
+                        message="Missing A1-A3 value for regression.",
+                        stage=self.name,
+                        process_uuid=ctx.process.uuid,
+                        epd_uuid=epd.uuid,
+                        indicator=ind,
+                    )
+                    continue
+
                 X.append(
                     [1.0]
                     + [1 if entry["technology"] == t else 0 for t in techs]
