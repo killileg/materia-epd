@@ -2,6 +2,7 @@
 from pathlib import Path
 
 import click
+import json
 
 from materia_epd.pipeline.run import run_materia
 from materia_epd.logging_utils import setup_logging
@@ -12,16 +13,29 @@ from materia_epd.logging_utils import setup_logging
 @click.argument("epd_folder_path", type=click.Path(exists=True, path_type=Path))
 @click.option("--output_path", "-o", type=click.Path(path_type=Path), required=False)
 @click.option(
+    "--process-list", "-p", type=click.Path(exists=True, path_type=Path), required=False
+)
+@click.option(
     "--verbose", "-v", "verbose", is_flag=True, flag_value=True, default=False
 )
 def main(
-    input_path: Path, epd_folder_path: Path, output_path: Path | None, verbose: bool
+    input_path: Path,
+    epd_folder_path: Path,
+    output_path: Path | None,
+    process_list: Path | None,
+    verbose: bool,
 ):
     """Process the given file or folder path."""
     # Setup logging immediately after CLI options are parsed
     setup_logging(verbose=verbose, output_folder=output_path)
 
-    run_materia(input_path, epd_folder_path, output_path)
+    process_uuids: set[str] | None = None
+    if process_list:
+        with open(process_list, "r") as f:
+            uuids = json.load(f)
+            process_uuids = set(uuids)
+
+    run_materia(input_path, epd_folder_path, output_path, process_uuids)
 
 
 if __name__ == "__main__":

@@ -1,5 +1,11 @@
+=========
 Changelog
 =========
+
+Version 0.8.0 (2026-09-08)
+--------------------------
+
+- Add `--process-list` CLI option to run pipeline only for specified process UUIDs from a JSON file
 
 Version 0.7.0 (2026-06-16)
 --------------------------
