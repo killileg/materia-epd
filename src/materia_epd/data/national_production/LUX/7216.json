@@ -1,3 +1,8 @@
 {
-  "production": 1380000000
+  "production": 1380000000,
+  "technology":
+    {
+      "EAF": 1.000,
+      "BOF": 0.000
+    }
 }

@@ -139,8 +139,11 @@ class IlcdProcess:
             e.add_note(f"Error parsing {flow_file.name}")
             raise e
 
-        exchange_amount = to_float(
-            ref_flow_exchange.findtext(XP.MEAN_AMOUNT, namespaces=NS), positive=True
+        exchange_amount = (
+            to_float(
+                ref_flow_exchange.findtext(XP.MEAN_AMOUNT, namespaces=NS), positive=True
+            )
+            or 1.0
         )
         kwargs = {
             v: None
