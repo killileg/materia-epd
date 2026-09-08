@@ -77,7 +77,10 @@ def print_pipeline_summary(ctx: EpdPipelineContext) -> None:
 
 
 def run_materia(
-    path_to_gen_folder: Path, path_to_epd_folder: Path, output_path: Path
+    path_to_gen_folder: Path,
+    path_to_epd_folder: Path,
+    output_path: Path,
+    process_uuids: set[str] | None = None,
 ) -> None:
     epds = list(gen_epds(path_to_epd_folder / "processes", logger))
     logger.info("Parsed XML EPDs", count=len(epds))
@@ -92,7 +95,8 @@ def run_materia(
         process.get_market()
         process.get_matches()
         if process.matches:
-            processes.append(process)
+            if process_uuids is None or process.uuid in process_uuids:
+                processes.append(process)
 
     def _run_process(process: IlcdProcess) -> EpdPipelineContext:
         ctx = EpdPipelineContext(

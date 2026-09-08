@@ -51,6 +51,22 @@ python -m materia_epd <generic_processes_dir> <epd_processes_dir> -o <output_dir
 
 Note that you need to point to the root `processes` folders and need to provide a `matches` folder in the generic data folder to link generic products and EPDs.
 Add the flag `--v` or `-v` for verbosity. Logs files with details will be automatically created in `<output_dir>`.
+
+#### Run for specific processes only
+
+By default, the pipeline runs for all processes with defined matches. To run only for specific processes, provide a JSON file containing an array of UUIDs via the `--process-list` or `-p` option:
+
+```console
+python -m materia_epd <generic_processes_dir> <epd_processes_dir> -p process_list.json -o <output_dir>
+```
+
+Example `process_list.json`:
+```json
+[
+  "8a3b1c4d-5e6f-7g8h-9i0j-1k2l3m4n5o6p",
+  "2d4e6f8a-9b1c-2d3e-4f5g-6h7i8j9k0l1m"
+]
+```
 The `<generic_processes_dir>` folder should be structured like this:
 
 
@@ -99,7 +115,7 @@ Files in `matches/` are named after the corresponding generic product UUID:
 }
 ```
 
-`type` is `"average"`, `"market-average"`, or `"assembled"`. The `uuids` list links to process files in the source EPD `processes/` folder.
+`type` is `"average"`, `"market-average"`, `"assembled"` or `"regression"`. The `uuids` list links to process files in the source EPD `processes/` folder.
 
 ---
 
